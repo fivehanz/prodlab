@@ -51,3 +51,8 @@
               }
               include snippets/snakeoil.conf;
 
+  roles:
+    - geerlingguy.docker
+    - geerlingguy.pip
+    - geerlingguy.git
+    - robertdebock.bootstrap
