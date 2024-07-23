@@ -2,7 +2,63 @@
 
 - hosts: "{{ target }}"
   become: true
+  pre_tasks:
+    - wait_for_connection: { timeout: 300 }
+  vars:
+    docker_install_compose: true
+    docker_edition: 'ce'
+    sysctl_settings:
+      vm.vfs_cache_pressure: 50
+      fs.file-max: 12000500
+      fs.nr_open: 20000500
+      net.core.netdev_max_backlog: 5000
+      net.core.rmem_max: 16777216
+      net.core.wmem_max: 16777216
+      net.ipv4.ip_local_port_range: 10024 65535
+      net.ipv4.tcp_mem: 262144 786432 1048576
+      net.ipv4.tcp_rmem: 4096 87380 16777216
+      net.ipv4.tcp_wmem: 4096 65536 16777216
+      net.ipv4.tcp_window_scaling: 1
+      net.ipv4.tcp_moderate_rcvbuf: 1
+      net.ipv4.tcp_congestion_control: cubic
+      net.ipv4.tcp_syncookies: 1
+      net.ipv4.tcp_syn_retries: 2
+      net.ipv4.tcp_synack_retries: 2
+      net.ipv4.tcp_tw_reuse: 1
+      net.ipv4.tcp_fin_timeout: 15
+      net.ipv4.tcp_max_syn_backlog: 4096
+      net.ipv6.conf.all.disable_ipv6: 0
+
+
   tasks:
+    - name: create admin user
+      ansible.builtin.include_role:
+        name: singleplatform-eng.users
+      vars:
+        users:
+          - username: admin
+            groups: ['wheel']
+            profile: |
+              alias ll='ls -lah'
+            ssh_key:
+              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF6HblojZT02NhCXYRgUih/A2uPpNOtgeUDQVzO2PcOb hanz@Haniels-MacBook-Air.local" 
+    
+    - name: Ensure admin user can sudo without a password
+      lineinfile:
+        dest: /etc/sudoers
+        state: present
+        regexp: '^admin ALL=\(ALL:ALL\) NOPASSWD: ALL'
+        line: 'admin ALL=(ALL:ALL) NOPASSWD: ALL'
+        validate: 'visudo -cf %s'
+
+    - name: enable swap
+      ansible.builtin.include_role:
+        name: geerlingguy.swap
+      vars:
+        swap_file_size_mb: '2048'
+        swap_swappiness: '10'
+        swap_file_state: present
+
     - name: configure firewall
       ansible.builtin.include_role:
         name: geerlingguy.firewall
@@ -20,6 +76,9 @@
     - name: generate snakeoil ssl certs
       command: make-ssl-cert generate-default-snakeoil
 
+    - name: Configure sysctl parameters
+      import_role:
+        name: sysctl
 
     - name: install and setup NGINX
       ansible.builtin.include_role:
@@ -27,32 +86,42 @@
       vars:
         nginx_service_state: started
         nginx_service_enabled: true
+        nginx_listen_ipv6: true
+        nginx_keepalive_timeout: "75"
+        nginx_keepalive_requests: "300"
 
         nginx_worker_processes: "auto" 
-        nginx_worker_connections: "8000"
+        nginx_worker_connections: "65534"
         nginx_extra_conf_options: |
-          worker_rlimit_nofile 8192; # find ways to increase it to max 65555
+          worker_rlimit_nofile 65534; 
 
         nginx_multi_accept: "on"
         nginx_server_tokens: "off" # disable nginx version sent 
-        nginx_tcp_nodelay: "off" # enable nagle buffering algorithm
+        nginx_tcp_nodelay: "on"
 
         nginx_remove_default_vhost: true
         nginx_vhosts:
+          - listen: "80 default_server"
+            server_name: "_"
+            filename: "default_80.conf"
+            return: "301 https://$host$request_uri"
           - listen: "443 default_server ssl http2"
             server_name: "_"
             root: "/var/www/html"
             index: "index.html intex.htm index.nginx-debian.html"
             state: "present"
-            filename: "default.conf"
+            filename: "default_443.conf"
             extra_parameters: |
               location / {
                 try_files $uri $uri/ =404;
               }
               include snippets/snakeoil.conf;
 
+
   roles:
+    - robertdebock.bootstrap
     - geerlingguy.docker
     - geerlingguy.pip
     - geerlingguy.git
-    - robertdebock.bootstrap
+    - geerlingguy.node_exporter
+    - igor_nikiforov.sysctl
