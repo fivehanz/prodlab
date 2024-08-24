@@ -161,7 +161,10 @@
             server_name: "_"
             filename: "default_80.conf"
             return: "301 https://$host$request_uri"
-
+          - listen: "443 ssl http2 default_server"
+            server_name: "_"
+            filename: "default_443.conf"
+            return: "400"
   roles:
     - robertdebock.bootstrap
     - geerlingguy.docker
