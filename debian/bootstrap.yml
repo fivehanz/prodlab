@@ -81,9 +81,9 @@
 
       # IPv6
       - name: net.ipv6.conf.all.disable_ipv6
-        value: 1 # disable on all interfaces
+        value: 0 # disable on all interfaces
       - name: net.ipv6.conf.default.disable_ipv6
-        value: 1 # disable on new interfaces
+        value: 0 # disable on new interfaces
       - name: net.ipv6.conf.lo.disable_ipv6
         value: 1 # disable on loopback interface
 
@@ -121,6 +121,7 @@
         name: geerlingguy.firewall
       vars:
         firewall_flush_rules_and_chains: false
+        firewall_enable_ipv6: true
         firewall_allowed_tcp_ports:
           - "22"
           - "80"
@@ -164,7 +165,7 @@
           - listen: "443 ssl http2 default_server"
             server_name: "_"
             filename: "default_443.conf"
-            return: "444"
+            return: "400"
             extra_parameters: |
               ssl_reject_handshake on;
 
