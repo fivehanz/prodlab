@@ -1,0 +1,180 @@
+---
+- hosts: all
+  become: true
+  pre_tasks:
+    - wait_for_connection: { timeout: 300 }
+  vars:
+    docker_install_compose: true
+    docker_edition: "ce"
+    sysctl_settings:
+      # virtual memory settings
+      - name: vm.vfs_cache_pressure
+        value: 50
+
+      # file system limits
+      - name: fs.file-max
+        value: 12000500 # max num of file handles
+      - name: fs.nr_open
+        value: 20000500 # per-process open file limit
+
+      # network core settings
+      - name: net.core.somaxconn
+        value: 65535 # max num of connections waiting to be accepted
+      - name: net.core.netdev_max_backlog
+        value: 5000 # network device input queue length
+      - name: net.core.rmem_max
+        value: 16777216 # max receive socket buffer size
+      - name: net.core.wmem_max
+        value: 16777216 # max send socket buffer size
+      - name: net.core.netdev_budget
+        value: 600 # num of packets handled in one polling cycle
+      - name: net.core.netdev_budget_usecs
+        value: 8000 # max time for handling packets in one polling cycle
+
+      # tcp settings
+      - name: net.ipv4.ip_local_port_range
+        value: 10024 65535 # expand range of ports for outgoing connections
+      - name: net.ipv4.tcp_mem
+        value: 262144 786432 1048576 # tcp memory limits
+      - name: net.ipv4.tcp_rmem
+        value: 4096 87380 16777216 # tcp recieve buffer
+      - name: net.ipv4.tcp_wmem
+        value: 4096 65536 16777216 # tcp send buffer
+      - name: net.ipv4.tcp_window_scaling
+        value: 1 # enable window scaling for better throughput
+      - name: net.ipv4.tcp_moderate_rcvbuf
+        value: 1 # automatic tuning of tcp buffer sizes
+      - name: net.ipv4.tcp_congestion_control
+        value: cubic
+      - name: net.ipv4.tcp_syncookies
+        value: 1 # enable SYN cookies, to prevent SYN flood attacks
+      - name: net.ipv4.tcp_syn_retries
+        value: 2 # number of SYN retransmits
+      - name: net.ipv4.tcp_synack_retries
+        value: 2 # number of SYN-ACK retransmits
+      - name: net.ipv4.tcp_tw_reuse
+        value: 1 # allow reuse of TIME-WAIT sockets for new connections
+      - name: net.ipv4.tcp_fin_timeout
+        value: 15 # time to hold socket in FIN-WAIT-2 state
+      - name: net.ipv4.tcp_max_syn_backlog
+        value: 4096 # SYN backlog for potential SYN flood protection
+      - name: net.ipv4.tcp_keepalive_time
+        value: 600 # time before sending keepalive probes
+      - name: net.ipv4.tcp_keepalive_intvl
+        value: 60 # interval between keepalive probes
+      - name: net.ipv4.tcp_keepalive_probes
+        value: 3 # num of keepalive probes before connection drop
+      - name: net.ipv4.tcp_fastopen
+        value: 3 # enable TCP fast open for both incoming and outgoing connections
+      - name: net.ipv4.tcp_orphan_retries
+        value: 1 # num of retries on orphaned sockets
+      - name: net.ipv4.tcp_retries2
+        value: 5 # num of retries before killing alive tcp connections
+
+      # ARP cache settings
+      - name: net.ipv4.neigh.default.gc_thresh1
+        value: 4096 # min num of entries to keep in ARP cache
+      - name: net.ipv4.neigh.default.gc_thresh2
+        value: 8192 # soft max num of entries
+      - name: net.ipv4.neigh.default.gc_thresh3
+        value: 16384 # hard max num of entries
+
+      # IPv6
+      - name: net.ipv6.conf.all.disable_ipv6
+        value: 0 # disable on all interfaces
+      - name: net.ipv6.conf.default.disable_ipv6
+        value: 0 # disable on new interfaces
+      - name: net.ipv6.conf.lo.disable_ipv6
+        value: 1 # disable on loopback interface
+
+  tasks:
+    - name: create admin user
+      ansible.builtin.include_role:
+        name: singleplatform-eng.users
+      vars:
+        users:
+          - username: admin
+            groups: ["wheel"]
+            profile: |
+              alias ll='ls -lah'
+            ssh_key:
+              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF6HblojZT02NhCXYRgUih/A2uPpNOtgeUDQVzO2PcOb hanz@Haniels-MacBook-Air.local"
+
+    - name: Ensure admin user can sudo without a password
+      lineinfile:
+        dest: /etc/sudoers
+        state: present
+        regexp: '^admin ALL=\(ALL:ALL\) NOPASSWD: ALL'
+        line: "admin ALL=(ALL:ALL) NOPASSWD: ALL"
+        validate: "visudo -cf %s"
+
+    - name: enable swap
+      ansible.builtin.include_role:
+        name: geerlingguy.swap
+      vars:
+        swap_file_size_mb: "2048"
+        swap_swappiness: "10"
+        swap_file_state: present
+
+    - name: configure firewall
+      ansible.builtin.include_role:
+        name: geerlingguy.firewall
+      vars:
+        firewall_flush_rules_and_chains: false
+        firewall_enable_ipv6: true
+        firewall_allowed_tcp_ports:
+          - "22"
+          - "80"
+          - "443"
+          # - "3000"
+        #   - "2377"
+        #   - "7946"
+        #   - "24007"
+        #   - "24008"
+        #   - "49152:49155"
+        # firewall_allowed_udp_ports:
+        #   - "7946"
+        #   - "4789"
+
+    - name: Configure sysctl parameters
+      ansible.builtin.include_role:
+        name: igor_nikiforov.sysctl
+
+    # - name: install and setup NGINX
+    #   ansible.builtin.include_role:
+    #     name: geerlingguy.NGINX
+    #   vars:
+    #     nginx_service_state: started
+    #     nginx_service_enabled: true
+    #     nginx_listen_ipv6: true
+    #     nginx_keepalive_timeout: "75"
+    #     nginx_keepalive_requests: "300"
+    #
+    #     nginx_worker_processes: "auto"
+    #     nginx_worker_connections: "65534"
+    #     nginx_extra_conf_options: |
+    #       worker_rlimit_nofile 65534;
+    #
+    #     nginx_multi_accept: "on"
+    #     nginx_server_tokens: "off" # disable nginx version sent
+    #     nginx_tcp_nodelay: "on"
+    #
+    #     nginx_remove_default_vhost: true
+    #     nginx_vhosts:
+    #       - listen: "80 default_server proxy_protocol"
+    #         server_name: "_"
+    #         filename: "default_80.conf"
+    #         return: "400"
+    #       - listen: "443 ssl http2 default_server proxy_protocol"
+    #         server_name: "_"
+    #         filename: "default_443.conf"
+    #         return: "400"
+    #         extra_parameters: |
+    #           ssl_reject_handshake on;
+
+  roles:
+    - robertdebock.bootstrap
+    - geerlingguy.docker
+    - geerlingguy.pip
+    - geerlingguy.git
+    - geerlingguy.node_exporter
