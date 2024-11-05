@@ -6,6 +6,10 @@
   vars:
     docker_install_compose: true
     docker_edition: "ce"
+    security_ssh_port: 22
+    security_autoupdate_enabled: true
+    security_fail2ban_enabled: true
+
     sysctl_settings:
       # virtual memory settings
       - name: vm.vfs_cache_pressure
@@ -178,3 +182,5 @@
     - geerlingguy.pip
     - geerlingguy.git
     - geerlingguy.node_exporter
+    - geerlingguy.repo-epel
+    - geerlingguy.security
