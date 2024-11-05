@@ -1,0 +1,12 @@
+---
+- hosts: all
+  become: true
+  pre_tasks:
+    - wait_for_connection: { timeout: 300 } 
+  roles:
+    - prometheus.prometheus.prometheus
+  vars:
+    prometheus_targets:
+      node:
+        - targets:
+          - localhost:9100
