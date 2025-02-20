@@ -92,13 +92,13 @@
       ansible.builtin.include_role:
         name: singleplatform-eng.users
       vars:
-        users:
-          - username: admin
-            groups: ["sudo"]
-            profile: |
-              alias ll='ls -lah'
-            ssh_key:
-              - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF6HblojZT02NhCXYRgUih/A2uPpNOtgeUDQVzO2PcOb hanz@Haniels-MacBook-Air.local"
+        # users:
+          # - username: admin
+          #   groups: ["sudo"]
+          #   profile: |
+          #     alias ll='ls -lah'
+          #   ssh_key:
+          #     - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIF6HblojZT02NhCXYRgUih/A2uPpNOtgeUDQVzO2PcOb hanz@Haniels-MacBook-Air.local"
 
     - name: Ensure admin user can sudo without a password
       lineinfile:
@@ -126,15 +126,6 @@
           - "22"
           - "80"
           - "443"
-          - "2376"
-          - "2377"
-          - "7946"
-          - "24007"
-          - "24008"
-          - "49152:49155"
-        firewall_allowed_udp_ports:
-          - "7946"
-          - "4789"
 
     - name: Configure sysctl parameters
       ansible.builtin.include_role:
